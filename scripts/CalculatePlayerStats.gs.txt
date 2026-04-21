@@ -1,0 +1,109 @@
+function calculatePlayerStats() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = ss.getSheetByName('Master Stats');
+  masterSheet.showRows(2, masterSheet.getMaxRows() - 1); // Unhide all rows first
+  
+  const gameSheetNames = [
+    'GAME 1 THURS', 'GAME 2 THURS', 'GAME 3 THURS', 'GAME 4 THURS',
+    'GAME 1 FRIDAY', 'GAME 2 FRIDAY', 'GAME 3 FRIDAY', 'GAME 4 FRIDAY',
+    'GAME 1 SATURDAY', 'GAME 2 SATURDAY', 'GAME 2 SUNDAY', 'GAME 3 SUNDAY',
+    'CHAMP GAME'
+  ];
+  
+  const gameSheets = gameSheetNames.map(name => ss.getSheetByName(name));
+
+  const playersRange = masterSheet.getRange('A2:A161');
+  const players = playersRange.getValues().filter(String).flat();
+
+  const headers = ['FGM', 'FGA', 'FG%', '3PM', '3PA', '3P%', 'Points', 'Rebounds', 'Assists', 'Steals', 'Blocks'];
+  
+  masterSheet.getRange(2, 3, players.length, headers.length).clearContent();
+
+  const statsSums = {};
+
+  players.forEach(player => {
+    statsSums[player] = {
+      fgm: 0,
+      fga: 0,
+      tpm: 0,
+      tpa: 0,
+      points: 0,
+      rebounds: 0,
+      assists: 0,
+      steals: 0,
+      blocks: 0,
+      games: 0
+    };
+  });
+
+  gameSheets.forEach(sheet => {
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const player = row[0]; 
+
+        if (players.includes(player) && players.find(p => p === player)) {
+          statsSums[player].fgm += row[1] || 0;  // FGM
+          statsSums[player].fga += row[2] || 0;  // FGA
+          statsSums[player].tpm += row[4] || 0;  // 3PM
+          statsSums[player].tpa += row[5] || 0;  // 3PA
+          
+          statsSums[player].points += row[9] || 0; // Total Points
+          statsSums[player].rebounds += row[10] || 0;
+          statsSums[player].assists += row[11] || 0;
+          statsSums[player].steals += row[12] || 0;
+          statsSums[player].blocks += row[13] || 0;
+          
+          statsSums[player].games++;
+        }
+      }
+    }
+  });
+
+  players.forEach((player, index) => {
+    const fgm = statsSums[player].fgm;
+    const fga = statsSums[player].fga;
+    const tpm = statsSums[player].tpm;
+    const tpa = statsSums[player].tpa;
+    const games = statsSums[player].games;
+    
+    const fgPerc = fga ? (fgm / fga) : 0; // Calculate as a decimal
+    const tpPerc = tpa ? (tpm / tpa) : 0; // Calculate as a decimal
+
+    const row = [
+      fgm,
+      fga,
+      fgPerc,
+      tpm,
+      tpa,
+      tpPerc,
+      games ? (statsSums[player].points / games).toFixed(3) : 0,
+      games ? (statsSums[player].rebounds / games).toFixed(3) : 0,
+      games ? (statsSums[player].assists / games).toFixed(3) : 0,
+      games ? (statsSums[player].steals / games).toFixed(3) : 0,
+      games ? (statsSums[player].blocks / games).toFixed(3) : 0
+    ].map(value => isNaN(value) ? 0 : value);
+
+    // Log values for debugging
+    console.log(`Player: ${player}, FGM: ${fgm}, FGA: ${fga}, 3PM: ${tpm}, 3PA: ${tpa}, Points: ${statsSums[player].points}, Assists: ${statsSums[player].assists}, Rebounds: ${statsSums[player].rebounds}, Steals: ${statsSums[player].steals}, Blocks:${statsSums[player].blocks}`);
+
+    masterSheet.getRange(index + 2, 3, 1, row.length).setValues([row]);
+    
+    // Hide row if it's an "Empty Bench Spot" and all stats are 0
+    const isEmptyBench = String(player).toLowerCase().includes("empty bench");
+    const allStatsZero = row.every(val => Number(val) === 0);
+
+    if (isEmptyBench && allStatsZero) {
+      masterSheet.hideRows(index + 2);
+    }
+  });
+
+  // Format FG% and 3P% columns as percentages
+  const fgPercColumn = masterSheet.getRange(2, 5, players.length);
+  fgPercColumn.setNumberFormat('0.00%'); // Format as percentage
+
+  const tpPercColumn = masterSheet.getRange(2, 8, players.length);
+  tpPercColumn.setNumberFormat('0.00%'); // Format as percentage
+}
